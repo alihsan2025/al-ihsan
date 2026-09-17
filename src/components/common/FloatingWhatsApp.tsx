@@ -3,7 +3,7 @@ import { MessageCircle } from 'lucide-react';
 
 const FloatingWhatsApp: React.FC = () => {
     // Replace with actual phone number in production
-    const phoneNumber = "2348000000000";
+            const phoneNumber = "447424763416";
     const message = encodeURIComponent("Salam, I would like to make a donation.");
 
     return (

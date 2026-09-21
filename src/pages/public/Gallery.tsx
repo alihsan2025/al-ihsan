@@ -17,9 +17,10 @@ interface GalleryItem {
   mediaType: 'image' | 'video' | 'video_link';
   source: 'gallery' | 'videos';
   createdAt: string;
+  thumbnail?: string;
 }
 
-const DEFAULT_VIDEOS: GalleryItem[] = [
+export const DEFAULT_VIDEOS: GalleryItem[] = [
   {
     id: 'default-video-1',
     url: 'https://drive.google.com/file/d/1Z_jSuwFPDcX7edIFpnd4Dlzub5Xnhxgc/view?usp=drive_link',
@@ -29,6 +30,7 @@ const DEFAULT_VIDEOS: GalleryItem[] = [
     mediaType: 'video_link',
     source: 'videos',
     createdAt: new Date().toISOString(),
+    thumbnail: '/video-cover-1.jpg',
   },
   {
     id: 'default-video-2',
@@ -39,6 +41,7 @@ const DEFAULT_VIDEOS: GalleryItem[] = [
     mediaType: 'video_link',
     source: 'videos',
     createdAt: new Date().toISOString(),
+    thumbnail: '/video-cover-2.jpg',
   },
 ];
 
@@ -284,12 +287,16 @@ const Gallery: React.FC = () => {
                     <video src={item.url} className="w-full h-full object-cover" preload="metadata" muted />
                   ) : item.mediaType === 'video_link' ? (
                     <div className="w-full h-full bg-primary-900 relative">
-                      {getVideoThumbnail(item.url) ? (
-                        <img src={getVideoThumbnail(item.url)!} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Film size={48} className="text-gold-400 opacity-50" />
-                        </div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <Film size={48} className="text-gold-400 opacity-50" />
+                      </div>
+                      {(item.thumbnail || getVideoThumbnail(item.url)) && (
+                        <img
+                          src={item.thumbnail || getVideoThumbnail(item.url)!}
+                          alt={item.title}
+                          className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+                        />
                       )}
                     </div>
                   ) : (
@@ -419,8 +426,8 @@ const Gallery: React.FC = () => {
                                   onClick={(e) => { e.stopPropagation(); setSelectedMediaIndex(idx); }}
                                   className={`relative flex-shrink-0 h-16 w-24 rounded-lg overflow-hidden border-2 transition-all duration-300 ${selectedMediaIndex === idx ? 'border-gold-500 scale-105 shadow-lg shadow-gold-500/20' : 'border-white/20 opacity-60 hover:opacity-100 hover:border-white/50'}`}
                                 >
-                                  {selectedItem.mediaType === 'video_link' && getVideoThumbnail(url) ? (
-                                    <img src={getVideoThumbnail(url)!} className="w-full h-full object-cover" />
+                                  {selectedItem.mediaType === 'video_link' && ((url === selectedItem.url && selectedItem.thumbnail) || getVideoThumbnail(url)) ? (
+                                    <img src={(url === selectedItem.url && selectedItem.thumbnail) || getVideoThumbnail(url)!} className="w-full h-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                                   ) : selectedItem.mediaType === 'video' && isVideoFile(url) ? (
                                     <video src={url} className="w-full h-full object-cover pointer-events-none" />
                                   ) : (
@@ -480,8 +487,8 @@ const Gallery: React.FC = () => {
                             >
                               {item.mediaType === 'image' ? (
                                 <img src={item.url} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover/related:scale-110" />
-                              ) : item.mediaType === 'video_link' && getVideoThumbnail(item.url) ? (
-                                <img src={getVideoThumbnail(item.url)!} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover/related:scale-110" />
+                              ) : item.mediaType === 'video_link' && (item.thumbnail || getVideoThumbnail(item.url)) ? (
+                                <img src={item.thumbnail || getVideoThumbnail(item.url)!} alt={item.title} className="w-full h-full object-cover transition-transform duration-500 group-hover/related:scale-110" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }} />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center bg-primary-900">
                                   <Film size={16} className="text-gold-400/50" />

@@ -13,81 +13,83 @@ import TypewriterText from '../../components/common/TypewriterText';
 import { useAppeals } from '../../hooks/useData';
 import { useAnimations } from '../../hooks/useAnimations';
 import { supabase } from '../../lib/supabase';
-
-interface HomeImage {
-    id: string;
-    title: string | null;
-    description: string;
-    url: string;
-}
+import { DEFAULT_VIDEOS } from './Gallery';
 
 interface HomeVideo {
     id: string;
     title: string | null;
     description: string;
     url: string;
+    thumbnail?: string;
 }
 
-const getVideoEmbedUrl = (url: string) => {
+const DEFAULT_HOME_VIDEOS: HomeVideo[] = DEFAULT_VIDEOS.map((v) => ({
+    id: v.id,
+    title: v.title,
+    description: v.description,
+    url: v.url,
+    thumbnail: v.thumbnail,
+}));
+
+const getDriveFileId = (url: string): string | null => {
     try {
-        const parsedUrl = new URL(url);
-
-        if (
-            parsedUrl.hostname.includes('youtube.com') ||
-            parsedUrl.hostname.includes('youtu.be')
-        ) {
-            const videoId =
-                parsedUrl.hostname.includes('youtu.be')
-                    ? parsedUrl.pathname.slice(1)
-                    : parsedUrl.searchParams.get('v');
-
-            return videoId ? `https://www.youtube.com/embed/${videoId}` : null;
-        }
-
-        if (parsedUrl.hostname.includes('vimeo.com')) {
-            const videoId = parsedUrl.pathname.split('/').filter(Boolean).pop();
-            return videoId ? `https://player.vimeo.com/video/${videoId}` : null;
-        }
+        const parsed = new URL(url);
+        if (!parsed.hostname.includes('drive.google.com')) return null;
+        const match = parsed.pathname.match(/\/file\/d\/([^/]+)/);
+        if (match) return match[1];
+        const idParam = parsed.searchParams.get('id');
+        return idParam || null;
     } catch {
         return null;
     }
+};
 
+const getYouTubeThumbnail = (url: string): string | null => {
+    try {
+        const parsed = new URL(url);
+        let videoId: string | null = null;
+        if (parsed.hostname.includes('youtu.be')) {
+            videoId = parsed.pathname.slice(1);
+        } else if (parsed.hostname.includes('youtube.com')) {
+            videoId = parsed.searchParams.get('v');
+        }
+        return videoId ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` : null;
+    } catch {
+        return null;
+    }
+};
+
+const getVideoThumbnail = (video: HomeVideo): string | null => {
+    if (video.thumbnail) return video.thumbnail;
+    const ytThumb = getYouTubeThumbnail(video.url);
+    if (ytThumb) return ytThumb;
+    const driveId = getDriveFileId(video.url);
+    if (driveId) return `https://drive.google.com/thumbnail?id=${driveId}&sz=w640`;
     return null;
 };
 
 const Home: React.FC = () => {
     const { appeals, loading: loadingAppeals } = useAppeals();
-    const [homeImages, setHomeImages] = React.useState<HomeImage[]>([]);
     const [homeVideos, setHomeVideos] = React.useState<HomeVideo[]>([]);
     const [loadingMedia, setLoadingMedia] = React.useState(true);
 
     React.useEffect(() => {
         const fetchMedia = async () => {
             try {
-                const [imagesResult, videosResult] = await Promise.all([
-                    supabase
-                        .from('gallery')
-                        .select('*')
-                        .order('created_at', { ascending: false })
-                        .limit(4),
-                    supabase
-                        .from('videos')
-                        .select('*')
-                        .order('created_at', { ascending: false })
-                        .limit(4),
-                ]);
-                setHomeImages(
-                    (imagesResult.data ?? []).map(
-                        (row) => ({ id: row.id, title: row.title, description: row.description ?? '', url: row.url } as HomeImage)
-                    )
+                const videosResult = await supabase
+                    .from('videos')
+                    .select('*')
+                    .order('created_at', { ascending: false })
+                    .limit(4);
+
+                const videos = (videosResult.data ?? []).map(
+                    (row) => ({ id: row.id, title: row.title, description: row.description ?? '', url: row.url } as HomeVideo)
                 );
-                setHomeVideos(
-                    (videosResult.data ?? []).map(
-                        (row) => ({ id: row.id, title: row.title, description: row.description ?? '', url: row.url } as HomeVideo)
-                    )
-                );
+
+                setHomeVideos(videos.length > 0 ? videos : DEFAULT_HOME_VIDEOS);
             } catch (error) {
                 console.error("Error fetching media:", error);
+                setHomeVideos(DEFAULT_HOME_VIDEOS);
             } finally {
                 setLoadingMedia(false);
             }
@@ -407,59 +409,9 @@ const Home: React.FC = () => {
             </motion.section>
 
 
-            {/* 7. LATEST MEDIA (Images & Videos) */}
+            {/* 7. OUR IMPACT IN ACTION (Videos) */}
             <section className="py-20 bg-white border-t border-gray-100">
                 <div className="container mx-auto px-6">
-                    {/* Images Section */}
-                    <motion.div
-                        initial="hidden"
-                        whileInView="visible"
-                        viewport={{ once: true }}
-                        className="mb-20"
-                    >
-                        <div className="text-center mb-12">
-                            <motion.span variants={dropIn} className="text-gold-500 font-bold tracking-widest uppercase text-sm mb-2 block">Gallery</motion.span>
-                            <motion.h2 variants={dropIn} className="text-3xl md:text-4xl font-heading font-bold text-primary-900">Latest from Gallery</motion.h2>
-                        </div>
-
-                        {loadingMedia ? (
-                            <div className="text-center py-10 text-gray-400">Loading images...</div>
-                        ) : homeImages.length > 0 ? (
-                            <motion.div variants={staggerContainer} className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                                {homeImages.map((img) => (
-                                    <motion.div key={img.id} variants={fadeInUp}>
-                                        <div className="group flex flex-col h-full bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow border border-gray-100 p-3">
-                                            <div className="aspect-square rounded-xl overflow-hidden bg-gray-100 relative mb-4">
-                                                <img src={img.url} alt={img.title || 'Gallery Image'} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                                                <div className="absolute inset-0 bg-primary-900/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                                            </div>
-                                            <div className="flex-1 flex flex-col items-center text-center px-2">
-                                                <h3 className="font-heading font-bold text-primary-900 text-lg md:text-xl line-clamp-1 group-hover:text-gold-600 transition-colors">{img.title || 'Untitled'}</h3>
-                                                {img.description && <p className="text-sm text-gray-500 mt-2 line-clamp-2">{img.description}</p>}
-                                                <div className="mt-auto pt-4">
-                                                    <Link to={`/gallery?view=${img.id}`} className="inline-flex items-center justify-center gap-2 px-5 py-2 bg-primary-50 text-primary-900 rounded-full font-bold text-sm hover:bg-gold-500 hover:text-white transition-colors w-full">
-                                                        <Eye size={16} /> View Post
-                                                    </Link>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                ))}
-                            </motion.div>
-                        ) : (
-                            <div className="text-center py-10 bg-gray-50 rounded-xl border border-gray-100">
-                                <p className="text-gray-500">No image available</p>
-                            </div>
-                        )}
-
-                        <div className="text-center mt-12">
-                            <Link to="/gallery" className="inline-flex items-center gap-2 px-8 py-3 border-2 border-primary-900 text-primary-900 font-bold rounded-full hover:bg-primary-900 hover:text-white transition-all">
-                                View Full Gallery <ArrowRight size={18} />
-                            </Link>
-                        </div>
-                    </motion.div>
-
-                    {/* Videos Section */}
                     <motion.div
                         initial="hidden"
                         whileInView="visible"
@@ -476,23 +428,20 @@ const Home: React.FC = () => {
                             <motion.div variants={staggerContainer} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                                 {homeVideos.map((video) => (
                                     <motion.div key={video.id} variants={fadeInUp}>
-                                        <div className="group flex flex-col h-full bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow border border-gray-100 p-3">
-                                            <div className="aspect-video rounded-xl overflow-hidden bg-gray-900 relative mb-4">
-                                                {getVideoEmbedUrl(video.url) ? (
-                                                    <iframe
-                                                        src={getVideoEmbedUrl(video.url) || undefined}
-                                                        title={video.title || 'Video'}
-                                                        className="w-full h-full pointer-events-none"
-                                                        loading="lazy"
+                                        <Link to={`/gallery?view=${video.id}`} className="group flex flex-col h-full bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-shadow border border-gray-100 p-3">
+                                            <div className="aspect-video rounded-xl overflow-hidden bg-primary-900 relative mb-4">
+                                                <div className="absolute inset-0 flex items-center justify-center bg-primary-950">
+                                                    <div className="text-sm uppercase tracking-widest text-gold-400">Video</div>
+                                                </div>
+                                                {getVideoThumbnail(video) && (
+                                                    <img
+                                                        src={getVideoThumbnail(video)!}
+                                                        alt={video.title || 'Video'}
+                                                        className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                                        onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
                                                     />
-                                                ) : video.url.match(/\.(mp4|webm|ogg)(\?.*)?$/i) ? (
-                                                    <video src={video.url} className="w-full h-full object-cover" preload="metadata" muted />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center bg-primary-950">
-                                                        <div className="text-sm uppercase tracking-widest text-gold-400">Video</div>
-                                                    </div>
                                                 )}
-                                                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                                <div className="absolute inset-0 bg-primary-900/10 group-hover:bg-primary-900/30 transition-colors flex items-center justify-center">
                                                     <div className="w-14 h-14 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center group-hover:bg-gold-500 group-hover:text-white group-hover:scale-110 transition-all text-primary-900 shadow-lg">
                                                         <div className="w-0 h-0 border-t-[8px] border-t-transparent border-l-[12px] border-l-current border-b-[8px] border-b-transparent ml-1"></div>
                                                     </div>
@@ -502,12 +451,12 @@ const Home: React.FC = () => {
                                                 <h3 className="font-heading font-bold text-primary-900 text-lg md:text-xl line-clamp-1 group-hover:text-gold-600 transition-colors">{video.title || 'Untitled Video'}</h3>
                                                 {video.description && <p className="text-sm text-gray-500 mt-2 line-clamp-2">{video.description}</p>}
                                                 <div className="mt-auto pt-4">
-                                                    <Link to={`/gallery?view=${video.id}`} className="inline-flex items-center justify-center gap-2 px-5 py-2 bg-primary-50 text-primary-900 rounded-full font-bold text-sm hover:bg-gold-500 hover:text-white transition-colors w-full">
+                                                    <span className="inline-flex items-center justify-center gap-2 px-5 py-2 bg-primary-50 text-primary-900 rounded-full font-bold text-sm group-hover:bg-gold-500 group-hover:text-white transition-colors w-full">
                                                         <Eye size={16} /> View Video
-                                                    </Link>
+                                                    </span>
                                                 </div>
                                             </div>
-                                        </div>
+                                        </Link>
                                     </motion.div>
                                 ))}
                             </motion.div>
